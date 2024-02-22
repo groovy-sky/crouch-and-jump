@@ -171,8 +171,9 @@ func (g *Game) Update() {
 			o.xPos--
 			if o.xPos < 0 {
 				g.obstacleCounter++
+
 				// Every 10 obstacles, replace obstacle with a heart
-				if g.obstacleCounter%10 == 0 {
+				if g.obstacleCounter == 10 {
 					yPos := rand.Intn(2) + 1
 					g.hearts = append(g.hearts, Heart{
 						xPos:      g.boardWidth,
@@ -180,6 +181,7 @@ func (g *Game) Update() {
 						yPos:      yPos,
 					})
 					g.obstacleCounter = 0 // Reset the obstacle counter
+					o.xPos = -1           // Move the obstacle out of the board
 				} else {
 					// If not a heart, then it's an obstacle
 					o.xPos = g.boardWidth

@@ -1,4 +1,4 @@
-module github.com/groovy-sky/crouch-and-jump/v2
+module github.com/groovy-sky/crouch-and-jump
 
 go 1.18
 
