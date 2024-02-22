@@ -15,31 +15,29 @@ var (
 )
 
 type Game struct {
-	screen          tcell.Screen
-	lives           int
-	playerPos       int
-	obstacles       []Obstacle
-	hearts          []Heart
-	score           int
-	jumping         bool
-	crouching       bool
-	jumpHeight      int
-	crouchTicks     int
-	obstacleCounter int
-	quit            chan struct{}
-	events          chan tcell.Event
-	boardWidth      int
-	boardHeight     int
-	borderIcon      rune
+	screen        tcell.Screen
+	lives         int
+	playerPos     int
+	objects       []Object
+	score         int
+	jumping       bool
+	crouching     bool
+	jumpHeight    int
+	crouchTicks   int
+	objectCounter int
+	quit          chan struct{}
+	events        chan tcell.Event
+	boardWidth    int
+	boardHeight   int
+	borderIcon    rune
 }
 
-type Obstacle struct {
-	xPos      int
-	tickCount int
-	yPos      int
+type Object struct {
+	Coordinates
+	Type int
 }
 
-type Heart struct {
+type Coordinates struct {
 	xPos      int
 	tickCount int
 	yPos      int
@@ -61,25 +59,18 @@ func NewGame(boardWidth, boardHeight int, borderIcon rune) (*Game, error) {
 	}()
 
 	rand.Seed(time.Now().UnixNano())
-	obstacles := make([]Obstacle, 4)
-	for i := range obstacles {
+	objects := make([]Object, 8)
+	for i := range objects {
 		tickCount := (i / 2) * (boardWidth / 2)
 		yPos := rand.Intn(2) + 1
-		obstacles[i] = Obstacle{
-			xPos:      boardWidth,
-			tickCount: tickCount,
-			yPos:      yPos,
-		}
-	}
-
-	hearts := make([]Heart, 4)
-	for i := range hearts {
-		tickCount := (i/10)*(boardWidth/2) + 10
-		yPos := rand.Intn(2) + 1
-		hearts[i] = Heart{
-			xPos:      boardWidth,
-			tickCount: tickCount,
-			yPos:      yPos,
+		objType := i % 2 // objects with even index will be obstacles, odd index will be hearts
+		objects[i] = Object{
+			Coordinates: Coordinates{
+				xPos:      boardWidth,
+				tickCount: tickCount,
+				yPos:      yPos,
+			},
+			Type: objType,
 		}
 	}
 
@@ -87,8 +78,7 @@ func NewGame(boardWidth, boardHeight int, borderIcon rune) (*Game, error) {
 		screen:      screen,
 		playerPos:   1,
 		lives:       3,
-		obstacles:   obstacles,
-		hearts:      hearts,
+		objects:     objects,
 		quit:        make(chan struct{}),
 		events:      events,
 		boardWidth:  boardWidth,
@@ -104,14 +94,13 @@ func (g *Game) Draw() {
 	if !g.crouching {
 		g.screen.SetContent(g.playerPos, yPos-1, PlayerIcon, nil, tcell.StyleDefault)
 	}
-	for _, o := range g.obstacles {
+	for _, o := range g.objects {
 		if o.xPos >= 0 {
-			g.screen.SetContent(o.xPos, g.boardHeight-o.yPos, ObstacleIcon, nil, tcell.StyleDefault)
-		}
-	}
-	for _, h := range g.hearts {
-		if h.xPos >= 0 {
-			g.screen.SetContent(h.xPos, g.boardHeight-h.yPos, HeartIcon, nil, tcell.StyleDefault)
+			if o.Type == 0 { // obstacle
+				g.screen.SetContent(o.xPos, g.boardHeight-o.yPos, ObstacleIcon, nil, tcell.StyleDefault)
+			} else { // heart
+				g.screen.SetContent(o.xPos, g.boardHeight-o.yPos, HeartIcon, nil, tcell.StyleDefault)
+			}
 		}
 	}
 	// Draw top border
@@ -144,7 +133,6 @@ func (g *Game) Draw() {
 	}
 	g.screen.Show()
 }
-
 func (g *Game) Update() {
 	if g.jumping {
 		if g.jumpHeight < 2 {
@@ -163,27 +151,29 @@ func (g *Game) Update() {
 		}
 	}
 
-	for i := range g.obstacles {
-		o := &g.obstacles[i]
+	for i := range g.objects {
+		o := &g.objects[i]
 		if o.tickCount > 0 {
 			o.tickCount--
 		} else {
 			o.xPos--
 			if o.xPos < 0 {
-				g.obstacleCounter++
+				g.objectCounter++
 
 				// Every 10 obstacles, replace obstacle with a heart
-				if g.obstacleCounter == 10 {
+				if g.objectCounter == 10 && o.Type == 0 {
 					yPos := rand.Intn(2) + 1
-					g.hearts = append(g.hearts, Heart{
-						xPos:      g.boardWidth,
-						tickCount: rand.Intn(g.boardWidth),
-						yPos:      yPos,
+					g.objects = append(g.objects, Object{
+						Coordinates: Coordinates{
+							xPos:      g.boardWidth,
+							tickCount: rand.Intn(g.boardWidth),
+							yPos:      yPos,
+						},
+						Type: 1, // 1 represents a heart
 					})
-					g.obstacleCounter = 0 // Reset the obstacle counter
-					o.xPos = -1           // Move the obstacle out of the board
-				} else {
-					// If not a heart, then it's an obstacle
+					g.objectCounter = 0 // Reset the object counter
+					o.xPos = -1         // Move the object out of the board
+				} else if o.Type == 0 { // If not a heart, then it's an obstacle
 					o.xPos = g.boardWidth
 					o.tickCount = rand.Intn(g.boardWidth)
 					g.score++
@@ -191,32 +181,20 @@ func (g *Game) Update() {
 			}
 		}
 		if o.xPos == g.playerPos {
-			if g.crouching && o.yPos > 1 {
-				continue
-			}
-			if g.jumpHeight <= (o.yPos - 1) {
-				g.lives--
-				if g.lives == 0 {
-					close(g.quit)
+			if o.Type == 0 { // obstacle
+				if g.crouching && o.yPos > 1 {
+					continue
 				}
+				if g.jumpHeight <= (o.yPos - 1) {
+					g.lives--
+					if g.lives == 0 {
+						close(g.quit)
+					}
+				}
+			} else if o.Type == 1 && g.lives < 3 { // heart
+				g.lives++
+				o.xPos = -1 // move the heart out of the board
 			}
-		}
-	}
-
-	for i := range g.hearts {
-		h := &g.hearts[i]
-		if h.tickCount > 0 {
-			h.tickCount--
-		} else {
-			h.xPos--
-			if h.xPos < 0 {
-				h.xPos = g.boardWidth
-				h.tickCount = rand.Intn(g.boardWidth)
-			}
-		}
-		if h.xPos == g.playerPos && g.lives < 3 {
-			g.lives++
-			h.xPos = -1 // move the heart out of the board
 		}
 	}
 }
