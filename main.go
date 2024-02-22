@@ -33,6 +33,7 @@ type Obstacle struct {
 	xPos      int
 	tickCount int
 	yPos      int
+	height    int // New field for height
 }
 
 func NewGame(boardWidth, boardHeight int, borderIcon rune) (*Game, error) {
@@ -54,7 +55,7 @@ func NewGame(boardWidth, boardHeight int, borderIcon rune) (*Game, error) {
 	obstacles := make([]Obstacle, 4)
 	for i := range obstacles {
 		tickCount := (i / 2) * (boardWidth / 2) // 2 obstacles in a row, then a gap
-		yPos := boardHeight - rand.Intn(2) + 1  // Random yPos between 1 and 2, considering player's height
+		yPos := rand.Intn(2) + 1                // Random yPos between 1 and 2, considering player's height
 		obstacles[i] = Obstacle{
 			xPos:      boardWidth,
 			tickCount: tickCount,
@@ -83,7 +84,7 @@ func (g *Game) Draw() {
 	}
 	for _, o := range g.obstacles {
 		if o.xPos >= 0 {
-			g.screen.SetContent(o.xPos, g.boardHeight-1, ObstacleIcon, nil, tcell.StyleDefault) // Subtract 1 to make the obstacle one cell higher
+			g.screen.SetContent(o.xPos, g.boardHeight-o.yPos, ObstacleIcon, nil, tcell.StyleDefault)
 		}
 	}
 	// Draw top border
@@ -135,9 +136,15 @@ func (g *Game) Update() {
 				g.score++
 			}
 		}
-		if o.xPos == g.playerPos && g.jumpHeight == 0 {
-			close(g.quit)
+		if o.xPos == g.playerPos {
+			if g.crouching && o.yPos > 1 {
+				continue
+			}
+			if g.jumpHeight <= (o.yPos - 1) {
+				close(g.quit)
+			}
 		}
+
 	}
 }
 
@@ -158,7 +165,7 @@ func (g *Game) HandleEvent(e tcell.Event) {
 }
 
 func (g *Game) Run() {
-	ticker := time.NewTicker(200 * time.Millisecond)
+	ticker := time.NewTicker(80 * time.Millisecond)
 	for {
 		select {
 		case <-g.quit:
