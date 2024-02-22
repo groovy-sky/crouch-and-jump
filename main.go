@@ -133,6 +133,7 @@ func (g *Game) Draw() {
 	}
 	g.screen.Show()
 }
+
 func (g *Game) Update() {
 	if g.jumping {
 		if g.jumpHeight < 2 {
@@ -158,25 +159,20 @@ func (g *Game) Update() {
 		} else {
 			o.xPos--
 			if o.xPos < 0 {
-				g.objectCounter++
-
-				// Every 10 obstacles, replace obstacle with a heart
-				if g.objectCounter == 10 && o.Type == 0 {
-					yPos := rand.Intn(2) + 1
-					g.objects = append(g.objects, Object{
-						Coordinates: Coordinates{
-							xPos:      g.boardWidth,
-							tickCount: rand.Intn(g.boardWidth),
-							yPos:      yPos,
-						},
-						Type: 1, // 1 represents a heart
-					})
-					g.objectCounter = 0 // Reset the object counter
-					o.xPos = -1         // Move the object out of the board
-				} else if o.Type == 0 { // If not a heart, then it's an obstacle
+				if o.Type == 0 { // If not a heart, then it's an obstacle
+					g.objectCounter++
+					if g.objectCounter == 10 && g.lives < 3 {
+						o.Type = 1          // change obstacle to a heart
+						g.objectCounter = 0 // Reset the object counter
+					} else {
+						o.xPos = g.boardWidth
+						o.tickCount = rand.Intn(g.boardWidth)
+						g.score++
+					}
+				} else if o.Type == 1 && g.lives < 3 { // heart
+					g.lives++
 					o.xPos = g.boardWidth
 					o.tickCount = rand.Intn(g.boardWidth)
-					g.score++
 				}
 			}
 		}
@@ -193,7 +189,7 @@ func (g *Game) Update() {
 				}
 			} else if o.Type == 1 && g.lives < 3 { // heart
 				g.lives++
-				o.xPos = -1 // move the heart out of the board
+				o.Type = 0 // change heart back to obstacle
 			}
 		}
 	}
