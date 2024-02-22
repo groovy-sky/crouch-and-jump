@@ -124,8 +124,8 @@ func (g *Game) Update() {
 		} else {
 			o.xPos--
 			if o.xPos < 0 {
-				o.xPos = 80
-				o.tickCount = rand.Intn(80)
+				o.xPos = g.boardWidth
+				o.tickCount = rand.Intn(g.boardWidth)
 				g.score++
 			}
 		}
@@ -169,7 +169,9 @@ func (g *Game) Run() {
 }
 
 func main() {
-	game, err := NewGame(30, 10, '#')
+	boardWidth := 40
+	boardHeight := 6
+	game, err := NewGame(boardWidth, boardHeight, ObstacleIcon)
 	if err != nil {
 		panic(err)
 	}

@@ -1,4 +1,4 @@
-module github.com/groovy-sky/mancala-cli/v2
+module github.com/groovy-sky/crouch-and-jump/v2
 
 go 1.18
 
