@@ -13,11 +13,6 @@ var (
 	ObstacleIcon = '▣'
 )
 
-type Obstacle struct {
-	xPos      int
-	tickCount int
-}
-
 type Game struct {
 	screen      tcell.Screen
 	playerPos   int
@@ -32,6 +27,12 @@ type Game struct {
 	boardWidth  int
 	boardHeight int
 	borderIcon  rune
+}
+
+type Obstacle struct {
+	xPos      int
+	tickCount int
+	yPos      int
 }
 
 func NewGame(boardWidth, boardHeight int, borderIcon rune) (*Game, error) {
@@ -49,11 +50,15 @@ func NewGame(boardWidth, boardHeight int, borderIcon rune) (*Game, error) {
 		}
 	}()
 
-	obstacles := make([]Obstacle, 5)
+	rand.Seed(time.Now().UnixNano())
+	obstacles := make([]Obstacle, 4)
 	for i := range obstacles {
+		tickCount := (i / 2) * (boardWidth / 2) // 2 obstacles in a row, then a gap
+		yPos := boardHeight - rand.Intn(2) + 1  // Random yPos between 1 and 2, considering player's height
 		obstacles[i] = Obstacle{
 			xPos:      boardWidth,
-			tickCount: rand.Intn(boardWidth),
+			tickCount: tickCount,
+			yPos:      yPos,
 		}
 	}
 
@@ -71,14 +76,14 @@ func NewGame(boardWidth, boardHeight int, borderIcon rune) (*Game, error) {
 
 func (g *Game) Draw() {
 	g.screen.Clear()
-	yPos := g.boardHeight - g.jumpHeight
+	yPos := g.boardHeight - g.jumpHeight - 1 // Subtract 1 to make the player one cell higher
 	g.screen.SetContent(g.playerPos, yPos, PlayerIcon, nil, tcell.StyleDefault)
 	if !g.crouching {
 		g.screen.SetContent(g.playerPos, yPos-1, PlayerIcon, nil, tcell.StyleDefault)
 	}
 	for _, o := range g.obstacles {
 		if o.xPos >= 0 {
-			g.screen.SetContent(o.xPos, g.boardHeight, ObstacleIcon, nil, tcell.StyleDefault)
+			g.screen.SetContent(o.xPos, g.boardHeight-1, ObstacleIcon, nil, tcell.StyleDefault) // Subtract 1 to make the obstacle one cell higher
 		}
 	}
 	// Draw top border
@@ -99,6 +104,7 @@ func (g *Game) Draw() {
 	}
 	g.screen.Show()
 }
+
 func (g *Game) Update() {
 	if g.jumping {
 		if g.jumpHeight < 2 {
