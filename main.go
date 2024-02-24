@@ -3,17 +3,36 @@ package main
 import (
 	"fmt"
 	"math/rand"
+	"os"
 	"time"
 
 	"github.com/gdamore/tcell"
 )
 
+// Icons for the player, obstacles, hearts, etc.
 var (
-	PlayerIcon   = '█'
+	PlayerIcon   = '▆'
 	ObstacleIcon = '▣'
 	HeartIcon    = '♥'
+	GroundIcon   = '▒'
+	BorderIcon   = '░'
 )
 
+// GameHandler holds the high score and creates new games.
+type GameHandler struct {
+	highScore int
+	done      chan struct{}
+}
+
+// NewGameHandler creates a new game handler.
+func NewGameHandler() *GameHandler {
+	return &GameHandler{
+		highScore: 0,
+		done:      make(chan struct{}),
+	}
+}
+
+// Game represents the game state.
 type Game struct {
 	screen        tcell.Screen
 	lives         int
@@ -30,20 +49,63 @@ type Game struct {
 	boardWidth    int
 	boardHeight   int
 	borderIcon    rune
+	highScore     int
 }
 
+// Object represents an object in the game.
 type Object struct {
 	Coordinates
 	Type int
 }
 
+// Coordinates represents the position of an object.
 type Coordinates struct {
 	xPos      int
 	tickCount int
 	yPos      int
 }
 
-func NewGame(boardWidth, boardHeight int, borderIcon rune) (*Game, error) {
+func (g *Game) IntroScreen() {
+	g.screen.Clear()
+
+	// Draw the intro screen
+	introText := []string{
+		"Welcome to the Game!",
+		"Controls:",
+		"  Up arrow: Jump",
+		"  Down arrow: Crouch",
+		"  Escape: Quit game",
+		fmt.Sprintf("High score: %d", g.highScore),
+		"Press any key to start the game...",
+	}
+
+	for i, line := range introText {
+		for j, r := range line {
+			g.screen.SetContent(j+2, i+2, r, nil, tcell.StyleDefault)
+		}
+	}
+	g.screen.Show()
+
+	// Wait for any key press
+	for {
+		ev := g.screen.PollEvent()
+		switch event := ev.(type) {
+		case *tcell.EventKey:
+			switch event.Key() {
+			case tcell.KeyEscape:
+				close(g.quit)
+				g.screen.Fini()
+				fmt.Println("Game ended from intro screen.")
+				os.Exit(0)
+			default:
+				return
+			}
+		}
+	}
+}
+
+// NewGame creates a new game with the given board width and height.
+func (gh *GameHandler) NewGame(boardWidth, boardHeight int, borderIcon rune) (*Game, error) {
 	screen, err := tcell.NewScreen()
 	if err != nil {
 		return nil, err
@@ -76,7 +138,7 @@ func NewGame(boardWidth, boardHeight int, borderIcon rune) (*Game, error) {
 
 	return &Game{
 		screen:      screen,
-		playerPos:   1,
+		playerPos:   2,
 		lives:       3,
 		objects:     objects,
 		quit:        make(chan struct{}),
@@ -84,9 +146,44 @@ func NewGame(boardWidth, boardHeight int, borderIcon rune) (*Game, error) {
 		boardWidth:  boardWidth,
 		boardHeight: boardHeight,
 		borderIcon:  borderIcon,
+		highScore:   gh.highScore,
 	}, nil
 }
 
+func (g *Game) DrawBox() {
+	// Draw full height vertical border column at the beginning and end of the game screen
+	for y := 0; y < g.boardHeight; y++ {
+		g.screen.SetContent(0, y, BorderIcon, nil, tcell.StyleDefault)
+		g.screen.SetContent(g.boardWidth-1, y, BorderIcon, nil, tcell.StyleDefault)
+	}
+	g.screen.Show()
+}
+
+func (g *Game) DrawLogo() {
+	// Define the logo as a slice of strings
+	logo := []string{
+		"  _____        __  __ _       ",
+		" ᏟᏒᎧᏟᎻ ᎪNᎠ ᎫUᎷᎮ     ",
+		"| |  __  __ _| |_| |_| |_   _ ",
+	}
+
+	// Calculate the starting point to center the logo
+	startX := (g.boardWidth - len(logo[0])) / 2
+	startY := (g.boardHeight - len(logo)) / 2
+
+	// Draw the logo inside the box
+	for y, line := range logo {
+		for x, ch := range line {
+			g.screen.SetContent(startX+x, startY+y, ch, nil, tcell.StyleDefault)
+		}
+	}
+	g.screen.Show()
+
+	// Wait for a few seconds
+	time.Sleep(3 * time.Second)
+}
+
+// Draw draws the game to the screen.
 func (g *Game) Draw() {
 	g.screen.Clear()
 	yPos := g.boardHeight - g.jumpHeight - 1 // Subtract 1 to make the player one cell higher
@@ -103,9 +200,15 @@ func (g *Game) Draw() {
 			}
 		}
 	}
+
+	// Draw the ground
+
+	for x := 0; x < g.boardWidth; x++ {
+		g.screen.SetContent(x, g.boardHeight, GroundIcon, nil, tcell.StyleDefault)
+	}
 	// Draw top border
 	for x := 0; x < g.boardWidth; x++ {
-		g.screen.SetContent(x, 0, g.borderIcon, nil, tcell.StyleDefault)
+		g.screen.SetContent(x, 0, BorderIcon, nil, tcell.StyleDefault)
 	}
 
 	// Draw score at the top row
@@ -121,15 +224,15 @@ func (g *Game) Draw() {
 
 	// Draw bottom border
 	for x := 0; x < g.boardWidth; x++ {
-		g.screen.SetContent(x, g.boardHeight+1, g.borderIcon, nil, tcell.StyleDefault)
+		g.screen.SetContent(x, g.boardHeight+1, BorderIcon, nil, tcell.StyleDefault)
 	}
 	// Draw left border
 	for y := 0; y < g.boardHeight+2; y++ {
-		g.screen.SetContent(0, y, g.borderIcon, nil, tcell.StyleDefault)
+		g.screen.SetContent(0, y, BorderIcon, nil, tcell.StyleDefault)
 	}
 	// Draw right border
 	for y := 0; y < g.boardHeight+2; y++ {
-		g.screen.SetContent(g.boardWidth, y, g.borderIcon, nil, tcell.StyleDefault)
+		g.screen.SetContent(g.boardWidth, y, BorderIcon, nil, tcell.StyleDefault)
 	}
 	g.screen.Show()
 }
@@ -159,24 +262,18 @@ func (g *Game) Update() {
 		} else {
 			o.xPos--
 			if o.xPos < 0 {
+				o.xPos = g.boardWidth
+				o.tickCount = rand.Intn(g.boardWidth)
 				if o.Type == 0 { // If not a heart, then it's an obstacle
-					g.objectCounter++
-					if g.objectCounter == 10 && g.lives < 3 {
-						o.Type = 1          // change obstacle to a heart
-						g.objectCounter = 0 // Reset the object counter
-					} else {
-						o.xPos = g.boardWidth
-						o.tickCount = rand.Intn(g.boardWidth)
-						g.score++
+					g.score++ // Increment the score only when the player avoids an obstacle
+				} else if o.Type == 1 { // heart
+					if g.lives < 3 {
+						g.lives++
 					}
-				} else if o.Type == 1 && g.lives < 3 { // heart
-					g.lives++
-					o.xPos = g.boardWidth
-					o.tickCount = rand.Intn(g.boardWidth)
 				}
 			}
 		}
-		if o.xPos == g.playerPos {
+		if o.xPos == g.playerPos-1 {
 			if o.Type == 0 { // obstacle
 				if g.crouching && o.yPos > 1 {
 					continue
@@ -187,15 +284,17 @@ func (g *Game) Update() {
 						close(g.quit)
 					}
 				}
-			} else if o.Type == 1 && g.lives < 3 { // heart
-				g.lives++
-				o.Type = 0 // change heart back to obstacle
+			} else if o.Type == 1 { // heart
+				if g.lives < 3 {
+					g.lives++
+				}
 			}
 		}
 	}
 }
 
-func (g *Game) HandleEvent(e tcell.Event) {
+// Handles keyboard events.
+func (g *Game) HandleEvent(e tcell.Event, gh *GameHandler) {
 	switch ev := e.(type) {
 	case *tcell.EventKey:
 		if ev.Key() == tcell.KeyUp && !g.jumping && g.jumpHeight == 0 && !g.crouching {
@@ -207,33 +306,53 @@ func (g *Game) HandleEvent(e tcell.Event) {
 		}
 		if ev.Key() == tcell.KeyEscape {
 			close(g.quit)
+			close(gh.done) // signal that the application should exit
 		}
 	}
 }
 
-func (g *Game) Run() {
+// Run starts the game loop.
+func (g *Game) Run(gh *GameHandler) {
+	g.DrawBox()
+	g.DrawLogo()
+	g.IntroScreen()
 	ticker := time.NewTicker(80 * time.Millisecond)
 	for {
 		select {
-		case <-g.quit:
-			g.screen.Fini()
-			fmt.Println("Game over! Your score: ", g.score)
-			return
 		case e := <-g.events:
-			g.HandleEvent(e)
+			g.HandleEvent(e, gh)
 		case <-ticker.C:
 			g.Update()
 			g.Draw()
+		case <-g.quit:
+			if g.score > g.highScore {
+				g.highScore = g.score
+				gh.highScore = g.score // update the high score in the game handler
+			}
+			g.screen.Fini()
+			fmt.Println("Game over! Your score: ", g.score)
+			return
 		}
 	}
 }
 
 func main() {
-	boardWidth := 40
-	boardHeight := 6
-	game, err := NewGame(boardWidth, boardHeight, ObstacleIcon)
-	if err != nil {
-		panic(err)
+	// Draws intro logo with size of boardWidth and boardHeight and waits 3 seconds
+	// Then starts the game
+
+	gh := NewGameHandler() // create a new game handler
+	for {
+		select {
+		case <-gh.done:
+			return // exit the application when done signal is received
+		default:
+			boardWidth := 40
+			boardHeight := 6
+			game, err := gh.NewGame(boardWidth, boardHeight, ObstacleIcon) // create a new game using the game handler
+			if err != nil {
+				panic(err)
+			}
+			game.Run(gh) // run the game using the game handler
+		}
 	}
-	game.Run()
 }
