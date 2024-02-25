@@ -67,21 +67,39 @@ type Coordinates struct {
 
 func (g *Game) IntroScreen() {
 	g.screen.Clear()
+	// Draw the border columns
+	for y := 0; y < g.boardHeight; y++ {
+		g.screen.SetContent(0, y, BorderIcon, nil, tcell.StyleDefault)
+		g.screen.SetContent(g.boardWidth+1, y, BorderIcon, nil, tcell.StyleDefault)
+	}
+
+	// Draw the border rows
+	for x := 0; x < g.boardWidth+1; x++ {
+		g.screen.SetContent(x, 0, BorderIcon, nil, tcell.StyleDefault)
+		g.screen.SetContent(x, g.boardHeight, BorderIcon, nil, tcell.StyleDefault)
+	}
+	// Define the logo as a slice of strings
+	logo := "CROUCH AND JUMP"
+
+	// Calculate the starting point to center the logo
+	startX := (g.boardWidth - len(logo)) / 2
+
+	// Draw the logo inside the box
+	for i, r := range logo {
+		g.screen.SetContent(startX+i, 0, r, nil, tcell.StyleDefault)
+	}
 
 	// Draw the intro screen
 	introText := []string{
-		"Welcome to the Game!",
-		"Controls:",
-		"  Up arrow: Jump",
-		"  Down arrow: Crouch",
-		"  Escape: Quit game",
-		fmt.Sprintf("High score: %d", g.highScore),
-		"Press any key to start the game...",
+		fmt.Sprintf("Control: ↑ ↓ High score: %d", g.highScore),
+		"",
+		"Press any key to start the game",
+		"(or escape key to exit the game)",
 	}
 
 	for i, line := range introText {
 		for j, r := range line {
-			g.screen.SetContent(j+2, i+2, r, nil, tcell.StyleDefault)
+			g.screen.SetContent(j+2, i+1, r, nil, tcell.StyleDefault)
 		}
 	}
 	g.screen.Show()
@@ -148,39 +166,6 @@ func (gh *GameHandler) NewGame(boardWidth, boardHeight int, borderIcon rune) (*G
 		borderIcon:  borderIcon,
 		highScore:   gh.highScore,
 	}, nil
-}
-
-func (g *Game) DrawBox() {
-	// Draw full height vertical border column at the beginning and end of the game screen
-	for y := 0; y < g.boardHeight; y++ {
-		g.screen.SetContent(0, y, BorderIcon, nil, tcell.StyleDefault)
-		g.screen.SetContent(g.boardWidth-1, y, BorderIcon, nil, tcell.StyleDefault)
-	}
-	g.screen.Show()
-}
-
-func (g *Game) DrawLogo() {
-	// Define the logo as a slice of strings
-	logo := []string{
-		"  _____        __  __ _       ",
-		" ᏟᏒᎧᏟᎻ ᎪNᎠ ᎫUᎷᎮ     ",
-		"| |  __  __ _| |_| |_| |_   _ ",
-	}
-
-	// Calculate the starting point to center the logo
-	startX := (g.boardWidth - len(logo[0])) / 2
-	startY := (g.boardHeight - len(logo)) / 2
-
-	// Draw the logo inside the box
-	for y, line := range logo {
-		for x, ch := range line {
-			g.screen.SetContent(startX+x, startY+y, ch, nil, tcell.StyleDefault)
-		}
-	}
-	g.screen.Show()
-
-	// Wait for a few seconds
-	time.Sleep(3 * time.Second)
 }
 
 // Draw draws the game to the screen.
@@ -313,8 +298,6 @@ func (g *Game) HandleEvent(e tcell.Event, gh *GameHandler) {
 
 // Run starts the game loop.
 func (g *Game) Run(gh *GameHandler) {
-	g.DrawBox()
-	g.DrawLogo()
 	g.IntroScreen()
 	ticker := time.NewTicker(80 * time.Millisecond)
 	for {
@@ -330,7 +313,6 @@ func (g *Game) Run(gh *GameHandler) {
 				gh.highScore = g.score // update the high score in the game handler
 			}
 			g.screen.Fini()
-			fmt.Println("Game over! Your score: ", g.score)
 			return
 		}
 	}
